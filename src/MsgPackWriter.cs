@@ -18,6 +18,7 @@ using System;
 using System.IO;
 using System.Text;
 
+
 namespace MsgPack
 {
 	public class MsgPackWriter
@@ -35,27 +36,19 @@ namespace MsgPack
 
 		public void Write (byte x)
 		{
-			if (x < 128) {
-				_strm.WriteByte (x);
-			} else {
-				byte[] tmp = _tmp;
-				tmp[0] = 0xcc; 
-				tmp[1] = x;
-				_strm.Write (tmp, 0, 2);
-			}
+			byte[] tmp = _tmp;
+			tmp[0] = 0xcc;
+			tmp[1] = x;
+			_strm.Write (tmp, 0, 2);
 		}
 
 		public void Write (ushort x)
 		{
-			if (x < 0x100) {
-				Write ((byte)x);
-			} else {
-				byte[] tmp = _tmp;
-				tmp[0] = 0xcd; 
-				tmp[1] = (byte)(x >> 8);
-				tmp[2] = (byte)x;
-				_strm.Write (tmp, 0, 3);
-			}
+			byte[] tmp = _tmp;
+			tmp[0] = 0xcd;
+			tmp[1] = (byte)(x >> 8);
+			tmp[2] = (byte)x;
+			_strm.Write (tmp, 0, 3);
 		}
 
 		public void Write (char x)
@@ -65,97 +58,71 @@ namespace MsgPack
 
 		public void Write (uint x)
 		{
-			if (x < 0x10000) {
-				Write ((ushort)x);
-			} else {
-				byte[] tmp = _tmp;
-				tmp[0] = 0xce; 
-				tmp[1] = (byte)(x >> 24);
-				tmp[2] = (byte)(x >> 16);
-				tmp[3] = (byte)(x >>  8);
-				tmp[4] = (byte)x;
-				_strm.Write (tmp, 0, 5);
-			}
+			byte[] tmp = _tmp;
+			tmp[0] = 0xce;
+			tmp[1] = (byte)(x >> 24);
+			tmp[2] = (byte)(x >> 16);
+			tmp[3] = (byte)(x >>  8);
+			tmp[4] = (byte)x;
+			_strm.Write (tmp, 0, 5);
 		}
 
 		public void Write (ulong x)
 		{
-			if (x < 0x100000000) {
-				Write ((uint)x);
-			} else {
-				byte[] tmp = _tmp;
-				tmp[0] = 0xcf; 
-				tmp[1] = (byte)(x >> 56);
-				tmp[2] = (byte)(x >> 48);
-				tmp[3] = (byte)(x >> 40);
-				tmp[4] = (byte)(x >> 32);
-				tmp[5] = (byte)(x >> 24);
-				tmp[6] = (byte)(x >> 16);
-				tmp[7] = (byte)(x >>  8);
-				tmp[8] = (byte)x;
-				_strm.Write (tmp, 0, 9);
-			}
+			byte[] tmp = _tmp;
+			tmp[0] = 0xcf;
+			tmp[1] = (byte)(x >> 56);
+			tmp[2] = (byte)(x >> 48);
+			tmp[3] = (byte)(x >> 40);
+			tmp[4] = (byte)(x >> 32);
+			tmp[5] = (byte)(x >> 24);
+			tmp[6] = (byte)(x >> 16);
+			tmp[7] = (byte)(x >>  8);
+			tmp[8] = (byte)x;
+			_strm.Write (tmp, 0, 9);
 		}
 
 		public void Write (sbyte x)
 		{
-			if (x >= -32 && x <= -1) {
-				_strm.WriteByte ((byte)(0xe0 | (byte)x));
-			} else if (x >= 0 && x <= 127) {
-				_strm.WriteByte ((byte)x);
-			} else {
-				byte[] tmp = _tmp;
-				tmp[0] = 0xd0;
-				tmp[1] = (byte)x;
-				_strm.Write (tmp, 0, 2);
-			}
+			byte[] tmp = _tmp;
+			tmp[0] = 0xd0;
+			tmp[1] = (byte)x;
+			_strm.Write (tmp, 0, 2);
 		}
 
 		public void Write (short x)
 		{
-			if (x >= sbyte.MinValue && x <= sbyte.MaxValue) {
-				Write ((sbyte)x);
-			} else {
-				byte[] tmp = _tmp;
-				tmp[0] = 0xd1;
-				tmp[1] = (byte)(x >> 8);
-				tmp[2] = (byte)x;
-				_strm.Write (tmp, 0, 3);
-			}
+			byte[] tmp = _tmp;
+			tmp[0] = 0xd1;
+			tmp[1] = (byte)(x >> 8);
+			tmp[2] = (byte)x;
+			_strm.Write (tmp, 0, 3);
 		}
 
 		public void Write (int x)
 		{
-			if (x >= short.MinValue && x <= short.MaxValue) {
-				Write ((short)x);
-			} else {
-				byte[] tmp = _tmp;
-				tmp[0] = 0xd2;
-				tmp[1] = (byte)(x >> 24);
-				tmp[2] = (byte)(x >> 16);
-				tmp[3] = (byte)(x >> 8);
-				tmp[4] = (byte)x;
-				_strm.Write (tmp, 0, 5);
-			}
+			byte[] tmp = _tmp;
+			tmp[0] = 0xd2;
+			tmp[1] = (byte)(x >> 24);
+			tmp[2] = (byte)(x >> 16);
+			tmp[3] = (byte)(x >> 8);
+			tmp[4] = (byte)x;
+			_strm.Write (tmp, 0, 5);
 		}
 
 		public void Write (long x)
 		{
-			if (x >= int.MinValue && x <= int.MaxValue) {
-				Write ((int)x);
-			} else {
-				byte[] tmp = _tmp;
-				tmp[0] = 0xd3;
-				tmp[1] = (byte)(x >> 56);
-				tmp[2] = (byte)(x >> 48);
-				tmp[3] = (byte)(x >> 40);
-				tmp[4] = (byte)(x >> 32);
-				tmp[5] = (byte)(x >> 24);
-				tmp[6] = (byte)(x >> 16);
-				tmp[7] = (byte)(x >> 8);
-				tmp[8] = (byte)x;
-				_strm.Write (tmp, 0, 9);
-			}
+			byte[] tmp = _tmp;
+			tmp[0] = 0xd3;
+			tmp[1] = (byte)(x >> 56);
+			tmp[2] = (byte)(x >> 48);
+			tmp[3] = (byte)(x >> 40);
+			tmp[4] = (byte)(x >> 32);
+			tmp[5] = (byte)(x >> 24);
+			tmp[6] = (byte)(x >> 16);
+			tmp[7] = (byte)(x >> 8);
+			tmp[8] = (byte)x;
+			_strm.Write (tmp, 0, 9);
 		}
 
 		public void WriteNil ()
@@ -218,13 +185,43 @@ namespace MsgPack
 		
 		public void Write (byte[] bytes)
 		{
-			WriteRawHeader (bytes.Length);
+			//WriteRawHeader (bytes.Length);
+			WriteBinHeader (bytes.Length);
 			_strm.Write (bytes, 0, bytes.Length);
+		}
+
+		public void Write(string s)
+		{
+			s.enco
 		}
 
 		public void WriteRawHeader (int N)
 		{
 			WriteLengthHeader (N, 32, 0xa0, 0xda, 0xdb);
+		}
+
+		public void WriteBinHeader (int N)
+		{
+			var t = _tmp;
+			if (N < 0xFF) {
+				t [0] = 0xc4;
+				t [1] = (byte)N;
+				_strm.Write (t, 0, 2);
+			} else if (N <= 0xFFFF) {
+				t [0] = 0xc5;
+				t [1] = (byte)(N >> 8);
+				t [2] = N & 0xff;
+				_strm.Write (t, 0, 3);
+			} else if (N <= 0xFFFFFFFF) {
+				t [0] = 0xc6;
+				t [1] = (byte)(N >> 24);
+				t [2] = (byte)(N >> 16);
+				t [3] = (byte)(N >> 8);
+				t [4] = (byte)(N & 0xff);
+				_strm.Write (t, 0, 5);
+			} else {
+				throw new Exception ("Bin lenght overflow");
+			}
 		}
 
 		public void WriteArrayHeader (int N)
@@ -316,6 +313,87 @@ namespace MsgPack
 					j += convertedChars;
 				}
 			//}
+		}
+
+		private void writeFloat(float x) {
+			byte[] raw = BitConverter.GetBytes (x); // unsafeコードを使う?
+			byte[] tmp = _tmp;
+			if (BitConverter.IsLittleEndian) {
+				tmp[1] = raw[3];
+				tmp[2] = raw[2];
+				tmp[3] = raw[1];
+				tmp[4] = raw[0];
+			} else {
+				tmp[1] = raw[0];
+				tmp[2] = raw[1];
+				tmp[3] = raw[2];
+				tmp[4] = raw[3];
+			}
+			_strm.Write (tmp, 0, 4);
+		}
+
+		public Write (UnityEngine.Vector2 v) {
+			WriteExtHeader(0x57, 8);
+			writeFloat(v.x);
+			writeFloat(v.y);
+		}
+		public Write (UnityEngine.Vector3 v) {
+			WriteExtHeader(0x56, 12);
+			writeFloat(v.x);
+			writeFloat(v.y);
+			writeFloat(v.z);
+		}
+		public Write (UnityEngine.Quaternion q) {
+			WriteExtHeader(0x51, 16);
+			writeFloat(q.w);
+			writeFloat(q.x);
+			writeFloat(q.y);
+			writeFloat(q.z);
+		}
+		public WriteExtHeader(sbyte type, int length) {
+			var t = _tmp;
+
+			switch (length) {
+			case 1:
+				_strm.WriteByte(0xd4);
+				break;
+			case 2:
+				_strm.WriteByte(0xd5);
+				break;
+			case 4:
+				_strm.WriteByte(0xd6);
+				break;
+			case 8:
+				_strm.WriteByte(0xd7);
+				break;
+			case 16:
+				_strm.WriteByte(0xd8);
+				break;
+			default:
+				if (length <= 0xff) {
+					t[0] = 0xc7;
+					t[1] = (byte)length;
+					_strm.Write(t, 0, 2);
+				} else if (length <= 0xffff) {
+					t[0] = 0xc8;
+					t[1] = (byte)(length >> 8);
+					t[2] = (byte)(length & 0xff);
+					_strm.Write(t, 0, 3);
+				} else if (length <= 0xffffffff) {
+					t[0] = 0xc9;
+					t[1] = (byte)(length >> 24);
+					t[2] = (byte)(length >> 16);
+					t[3] = (byte)(length >> 8);
+					t[4] = (byte)(length & 0xff);
+					_strm.Write(t, 0, 5);
+				} else {
+					throw new Exception("ext type length overflow");
+				}
+			}
+		}
+		public Write (Ext ex) {
+			WriteExtHeader(ex.Type, ex.Data.Length);
+			_strm.Write(ex.Data, 0, ex.Data.Length);
 		}
 	}
 }

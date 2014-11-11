@@ -208,7 +208,7 @@ namespace MsgPack
 							b = reader.ReadSingle ();
 							c = reader.ReadSingle ();
 							d = reader.ReadSingle ();
-							return new UnityEngine.Quaternion (a, b, c, d);
+							return new UnityEngine.Quaternion (b, c, d, a);
 						}
 						break;
 					case 0x56:
