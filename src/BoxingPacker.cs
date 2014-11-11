@@ -22,6 +22,16 @@ using System.Reflection;
 
 namespace MsgPack
 {
+	public struct Ext {
+		sbyte Type;
+		byte[] Data;
+
+		public Ext(sbyte type, byte[] data) {
+			Type = type;
+			Data = data;
+		}
+	}
+
 	public class BoxingPacker
 	{
 		static Type KeyValuePairDefinitionType;
@@ -130,14 +140,19 @@ namespace MsgPack
 			switch (reader.Type) {
 				case TypePrefixes.PositiveFixNum:
 				case TypePrefixes.NegativeFixNum:
-				case TypePrefixes.Int8:
-				case TypePrefixes.Int16:
 				case TypePrefixes.Int32:
 					return reader.ValueSigned;
+				case TypePrefixes.Int8:
+					return (sbyte)reader.ValueSigned;
+				case TypePrefixes.Int16:
+					return (Int16)reader.ValueSigned;
 				case TypePrefixes.Int64:
 					return reader.ValueSigned64;
+
 				case TypePrefixes.UInt8:
+					return (byte)reader.ValueUnsigned;
 				case TypePrefixes.UInt16:
+					return (UInt16)reader.ValueUnsigned;
 				case TypePrefixes.UInt32:
 					return reader.ValueUnsigned;
 				case TypePrefixes.UInt64:
@@ -153,11 +168,16 @@ namespace MsgPack
 				case TypePrefixes.Nil:
 					return null;
 				case TypePrefixes.FixRaw:
+				case TypePrefixes.Raw8:
 				case TypePrefixes.Raw16:
 				case TypePrefixes.Raw32:
-					byte[] raw = new byte[reader.Length];
-					reader.ReadValueRaw (raw, 0, raw.Length);
-					return raw;
+					return reader.ReadRawString ();
+				case TypePrefixes.Bin8:
+				case TypePrefixes.Bin16:
+				case TypePrefixes.Bin32:
+					byte[] tmp = new byte[reader.Length];
+					reader.ReadValueRaw (tmp, 0, tmp.Length);
+					return tmp;
 				case TypePrefixes.FixArray:
 				case TypePrefixes.Array16:
 				case TypePrefixes.Array32:
@@ -176,6 +196,42 @@ namespace MsgPack
 						dic.Add (k, v);
 					}
 					return dic;
+				case TypePrefixes.Ext8:
+				case TypePrefixes.Ext16:
+				case TypePrefixes.Ext32:
+					var et = reader.ReadExtType ();
+					switch (et) {
+					case 0x51:
+						if (reader.Length == 16) {
+							float a, b, c, d;
+							a = reader.ReadSingle ();
+							b = reader.ReadSingle ();
+							c = reader.ReadSingle ();
+							d = reader.ReadSingle ();
+							return new UnityEngine.Quaternion (a, b, c, d);
+						}
+						break;
+					case 0x56:
+						if (reader.Length == 12) {
+							float a, b, c;
+							a = reader.ReadSingle ();
+							b = reader.ReadSingle ();
+							c = reader.ReadSingle ();
+							return new UnityEngine.Vector3 (a, b, c);
+						}
+						break;
+					case 0x57:
+						if (reader.Length == 8) {
+							float a, b;
+							a = reader.ReadSingle ();
+							b = reader.ReadSingle ();
+							return new UnityEngine.Vector2 (a, b);
+						}
+						break;
+					}
+					var data = new byte[reader.Length];
+					reader.ReadValueRaw (data, 0, reader.Length);
+					return new Ext (et, data);
 				default:
 					throw new FormatException ();
 			}

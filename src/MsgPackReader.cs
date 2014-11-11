@@ -23,11 +23,8 @@ namespace MsgPack
 	public class MsgPackReader
 	{
 		Stream _strm;
-		byte[] _tmp0 = new byte[8];
-		byte[] _tmp1 = new byte[8];
-
 		Encoding _encoding = Encoding.UTF8;
-		//Decoder _decoder = Encoding.UTF8.GetDecoder ();
+
 		byte[] _buf = new byte[64];
 
 		public MsgPackReader (Stream strm)
@@ -48,6 +45,8 @@ namespace MsgPack
 
 		public float ValueFloat { get; private set; }
 		public double ValueDouble { get; private set; }
+
+		public sbyte ExtType { get; private set; }
 
 		public bool IsSigned ()
 		{
@@ -83,7 +82,13 @@ namespace MsgPack
 
 		public bool IsRaw ()
 		{
-			return this.Type == TypePrefixes.FixRaw || this.Type == TypePrefixes.Raw16 || this.Type == TypePrefixes.Raw32;
+			return this.Type == TypePrefixes.FixRaw || this.Type == TypePrefixes.Raw8 || this.Type == TypePrefixes.Raw16 || this.Type == TypePrefixes.Raw32;
+		}
+
+		public bool IsBinary()
+		{
+			var t = this.Type;
+			return t == TypePrefixes.Bin8 || t == TypePrefixes.Bin16 || t == TypePrefixes.Bin32;
 		}
 
 		public bool IsArray ()
@@ -98,7 +103,8 @@ namespace MsgPack
 
 		public bool Read ()
 		{
-			byte[] tmp0 = _tmp0, tmp1 = _tmp1;
+			byte[] tmp0 = new byte[8];
+			byte[] tmp1 = new byte[8];
 			int x = _strm.ReadByte ();
 			if (x < 0)
 				return false; // EOS
@@ -113,6 +119,8 @@ namespace MsgPack
 				this.Type = TypePrefixes.FixArray;
 			} else if (x >= 0x80 && x <= 0x8f) {
 				this.Type = TypePrefixes.FixMap;
+			} else if (0xd4 <= x && x <= 0xd8) {
+				this.Type = TypePrefixes.FixExt;
 			} else {
 				this.Type = (TypePrefixes)x;
 			}
@@ -127,32 +135,10 @@ namespace MsgPack
 					ValueBoolean = true;
 					break;
 				case TypePrefixes.Float:
-					_strm.Read (tmp0, 0, 4);
-					if (BitConverter.IsLittleEndian) {
-						tmp1[0] = tmp0[3];
-						tmp1[1] = tmp0[2];
-						tmp1[2] = tmp0[1];
-						tmp1[3] = tmp0[0];
-						ValueFloat = BitConverter.ToSingle (tmp1, 0);
-					} else {
-						ValueFloat = BitConverter.ToSingle (tmp0, 0);
-					}
+					ReadSingle ();
 					break;
 				case TypePrefixes.Double:
-					_strm.Read (tmp0, 0, 8);
-					if (BitConverter.IsLittleEndian) {
-						tmp1[0] = tmp0[7];
-						tmp1[1] = tmp0[6];
-						tmp1[2] = tmp0[5];
-						tmp1[3] = tmp0[4];
-						tmp1[4] = tmp0[3];
-						tmp1[5] = tmp0[2];
-						tmp1[6] = tmp0[1];
-						tmp1[7] = tmp0[0];
-						ValueDouble = BitConverter.ToDouble (tmp1, 0);
-					} else {
-						ValueDouble = BitConverter.ToDouble (tmp0, 0);
-					}
+					ReadDouble ();
 					break;
 				case TypePrefixes.NegativeFixNum:
 					ValueSigned = (x & 0x1f) - 0x20;
@@ -210,25 +196,65 @@ namespace MsgPack
 				case TypePrefixes.FixMap:
 					Length = (uint)(x & 0xf);
 					break;
+				case TypePrefixes.Raw8:
+				case TypePrefixes.Bin8:
+				case TypePrefixes.Ext8:
+					if (_strm.Read (tmp0, 0, 1) != 1)
+						throw new FormatException ();
+					Length = (uint)tmp0 [0];
+					break;
 				case TypePrefixes.Raw16:
+				case TypePrefixes.Bin16:
 				case TypePrefixes.Array16:
 				case TypePrefixes.Map16:
+				case TypePrefixes.Ext16:
 					if (_strm.Read (tmp0, 0, 2) != 2)
 						throw new FormatException ();
 					Length = ((uint)tmp0[0] << 8) | (uint)tmp0[1];
 					break;
 				case TypePrefixes.Raw32:
+				case TypePrefixes.Bin32:
 				case TypePrefixes.Array32:
 				case TypePrefixes.Map32:
+				case TypePrefixes.Ext32:
 					if (_strm.Read (tmp0, 0, 4) != 4)
 						throw new FormatException ();
 					Length = ((uint)tmp0[0] << 24) | ((uint)tmp0[1] << 16) | ((uint)tmp0[2] << 8) | (uint)tmp0[3];
+					break;
+				case TypePrefixes.FixExt:
+					switch (x) {
+					case 0xd4:
+						Length = 1;
+						break;
+					case 0xd5:
+						Length = 2;
+						break;
+					case 0xd6:
+						Length = 4;
+						break;
+					case 0xd7:
+						Length = 8;
+						break;
+					case 0xd8:
+						Length = 16;
+						break;
+					}
 					break;
 				default:
 					throw new FormatException ();
 			}
 			return true;
 		}
+
+		public sbyte ReadExtType ()
+		{
+			int b = _strm.ReadByte ();
+			if (b < 0)
+				throw new FormatException ();
+			ExtType = (sbyte)b;
+			return ExtType;
+		}
+
 
 		public int ReadValueRaw (byte[] buf, int offset, int count)
 		{
@@ -253,6 +279,43 @@ namespace MsgPack
 			if (ReadValueRaw (tmp, 0, tmp.Length) != tmp.Length)
 				throw new FormatException ();
 			return _encoding.GetString (tmp);
+		}
+
+		public float ReadSingle() {
+			byte[] tmp0 = new byte[4];
+			byte[] tmp1 = new byte[4];
+			_strm.Read (tmp0, 0, 4);
+			if (BitConverter.IsLittleEndian) {
+				tmp1 [0] = tmp0 [3];
+				tmp1 [1] = tmp0 [2];
+				tmp1 [2] = tmp0 [1];
+				tmp1 [3] = tmp0 [0];
+				ValueFloat = BitConverter.ToSingle (tmp1, 0);
+			} else {
+				ValueFloat = BitConverter.ToSingle (tmp0, 0);
+			}
+			return ValueFloat;
+		}
+
+		public double ReadDouble() {
+			byte[] tmp0 = new byte[8];
+			byte[] tmp1 = new byte[8];
+
+			_strm.Read (tmp0, 0, 8);
+			if (BitConverter.IsLittleEndian) {
+				tmp1[0] = tmp0[7];
+				tmp1[1] = tmp0[6];
+				tmp1[2] = tmp0[5];
+				tmp1[3] = tmp0[4];
+				tmp1[4] = tmp0[3];
+				tmp1[5] = tmp0[2];
+				tmp1[6] = tmp0[1];
+				tmp1[7] = tmp0[0];
+				ValueDouble = BitConverter.ToDouble (tmp1, 0);
+			} else {
+				ValueDouble = BitConverter.ToDouble (tmp0, 0);
+			}
+			return ValueDouble;
 		}
 	}
 }
