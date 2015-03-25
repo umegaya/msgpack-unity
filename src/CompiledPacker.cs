@@ -14,6 +14,8 @@
 // limitations under the License.
 //
 
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -533,9 +535,11 @@ namespace MsgPack
 
 			internal static string Unpack_String (MsgPackReader reader)
 			{
-				if (!reader.Read () || !reader.IsRaw ())
+				if (!reader.Read () || !reader.IsStr ())
 					UnpackFailed ();
-				return reader.ReadRawString ();
+				byte[] bs = new byte[reader.Length];
+				reader.ReadStream (bs, reader.Length);
+				return reader.StringifyBytes(bs);
 			}
 
 			internal static void UnpackFailed ()
@@ -547,3 +551,5 @@ namespace MsgPack
 		#endregion
 	}
 }
+
+#endif

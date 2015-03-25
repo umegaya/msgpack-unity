@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Collections;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
@@ -110,39 +111,39 @@ namespace MsgPack
 			}
 		}
 
-		public T Unpack<T> (byte[] buf)
+		public IEnumerator Unpack<T> (byte[] buf)
 		{
-			return Unpack<T> (buf, 0, buf.Length);
+			yield return Unpack<T> (buf, 0, buf.Length);
 		}
 
-		public T Unpack<T> (byte[] buf, int offset, int size)
+		public IEnumerator Unpack<T> (byte[] buf, int offset, int size)
 		{
 			using (MemoryStream ms = new MemoryStream (buf, offset, size)) {
-				return Unpack<T> (ms);
+				yield return Unpack<T> (ms);
 			}
 		}
 
-		public T Unpack<T> (Stream strm)
+		public IEnumerator Unpack<T> (Stream strm)
 		{
 			if (typeof (T).IsPrimitive)
 				throw new NotSupportedException ();
 			MsgPackReader reader = new MsgPackReader (strm);
-			return (T)Unpack (reader, typeof (T));
+			yield return (T)Unpack (reader, typeof (T));
 		}
 
-		public object Unpack (Type type, byte[] buf)
+		public IEnumerator Unpack (Type type, byte[] buf)
 		{
 			return Unpack (type, buf, 0, buf.Length);
 		}
 
-		public object Unpack (Type type, byte[] buf, int offset, int size)
+		public IEnumerator Unpack (Type type, byte[] buf, int offset, int size)
 		{
 			using (MemoryStream ms = new MemoryStream (buf, offset, size)) {
 				return Unpack (type, ms);
 			}
 		}
 
-		public object Unpack (Type type, Stream strm)
+		public IEnumerator Unpack (Type type, Stream strm)
 		{
 			if (type.IsPrimitive)
 				throw new NotSupportedException ();
@@ -150,62 +151,65 @@ namespace MsgPack
 			return Unpack (reader, type);
 		}
 
-		object Unpack (MsgPackReader reader, Type t)
+		IEnumerator Unpack (MsgPackReader reader, Type t)
 		{
 			if (t.IsPrimitive) {
-				if (!reader.Read ()) throw new FormatException ();
-				if (t.Equals (typeof (int)) && reader.IsSigned ()) return reader.ValueSigned;
-				else if (t.Equals (typeof (uint)) && reader.IsUnsigned ()) return reader.ValueUnsigned;
-				else if (t.Equals (typeof (float)) && reader.Type == TypePrefixes.Float) return reader.ValueFloat;
-				else if (t.Equals (typeof (double)) && reader.Type == TypePrefixes.Double) return reader.ValueDouble;
+				reader.Read ();
+				if (t.Equals (typeof (int)) && reader.IsSigned ()) yield return reader.ValueSigned;
+				else if (t.Equals (typeof (uint)) && reader.IsUnsigned ()) yield return reader.ValueUnsigned;
+				else if (t.Equals (typeof (float)) && reader.Type == TypePrefixes.Float) yield return reader.ValueFloat;
+				else if (t.Equals (typeof (double)) && reader.Type == TypePrefixes.Double) yield return reader.ValueDouble;
 				else if (t.Equals (typeof (long))) {
 					if (reader.IsSigned64 ())
-						return reader.ValueSigned64;
+						yield return reader.ValueSigned64;
 					if (reader.IsSigned ())
-						return (long)reader.ValueSigned;
+						yield return (long)reader.ValueSigned;
 				} else if (t.Equals (typeof (ulong))) {
 					if (reader.IsUnsigned64 ())
-						return reader.ValueUnsigned64;
+						yield return reader.ValueUnsigned64;
 					if (reader.IsUnsigned ())
-						return (ulong)reader.ValueUnsigned;
-				} else if (t.Equals (typeof (bool)) && reader.IsBoolean ()) return (reader.Type == TypePrefixes.True);
-				else if (t.Equals (typeof (byte)) && reader.IsUnsigned ()) return (byte)reader.ValueUnsigned;
-				else if (t.Equals (typeof (sbyte)) && reader.IsSigned ()) return (sbyte)reader.ValueSigned;
-				else if (t.Equals (typeof (short)) && reader.IsSigned ()) return (short)reader.ValueSigned;
-				else if (t.Equals (typeof (ushort)) && reader.IsUnsigned ()) return (ushort)reader.ValueUnsigned;
-				else if (t.Equals (typeof (char)) && reader.IsUnsigned ()) return (char)reader.ValueUnsigned;
+						yield return (ulong)reader.ValueUnsigned;
+				} else if (t.Equals (typeof (bool)) && reader.IsBoolean ()) yield return (reader.Type == TypePrefixes.True);
+				else if (t.Equals (typeof (byte)) && reader.IsUnsigned ()) yield return (byte)reader.ValueUnsigned;
+				else if (t.Equals (typeof (sbyte)) && reader.IsSigned ()) yield return (sbyte)reader.ValueSigned;
+				else if (t.Equals (typeof (short)) && reader.IsSigned ()) yield return (short)reader.ValueSigned;
+				else if (t.Equals (typeof (ushort)) && reader.IsUnsigned ()) yield return (ushort)reader.ValueUnsigned;
+				else if (t.Equals (typeof (char)) && reader.IsUnsigned ()) yield return (char)reader.ValueUnsigned;
 				else throw new NotSupportedException ();
 			}
 
 			UnpackDelegate unpacker;
 			if (UnpackerMapping.TryGetValue (t, out unpacker))
-				return unpacker (this, reader);
+				yield return unpacker (this, reader);
 
 			if (t.IsArray) {
-				if (!reader.Read () || (!reader.IsArray () && reader.Type != TypePrefixes.Nil))
+				reader.Read ();
+				if (!reader.IsArray () && reader.Type != TypePrefixes.Nil)
 					throw new FormatException ();
 				if (reader.Type == TypePrefixes.Nil)
-					return null;
+					yield return null;
 				Type et = t.GetElementType ();
 				Array ary = Array.CreateInstance (et, (int)reader.Length);
 				for (int i = 0; i < ary.Length; i ++)
 					ary.SetValue (Unpack (reader, et), i);
-				return ary;
+				yield return ary;
 			}
 
-			if (!reader.Read ())
-				throw new FormatException ();
+			reader.Read ();
 			if (reader.Type == TypePrefixes.Nil)
-					return null;
+				yield return null;
 			if (t.IsInterface) {
 				if (reader.Type != TypePrefixes.FixArray && reader.Length != 2)
 					throw new FormatException ();
-				if (!reader.Read () || !reader.IsRaw ())
+				reader.Read ();
+				if (!reader.IsBinary ())
 					throw new FormatException ();
-				CheckBufferSize ((int)reader.Length);
-				reader.ReadValueRaw (_buf, 0, (int)reader.Length);
-				t = Type.GetType (Encoding.UTF8.GetString (_buf, 0, (int)reader.Length));
-				if (!reader.Read () || reader.Type == TypePrefixes.Nil)
+				Reserve(reader.Length);
+				reader.ReadRawBytes(_buf);
+				string name = reader.StringifyBytes(_buf);
+				t = Type.GetType (name);
+				reader.Read ();
+				if (reader.Type == TypePrefixes.Nil)
 					throw new FormatException ();
 			}
 			if (!reader.IsMap ())
@@ -215,11 +219,12 @@ namespace MsgPack
 			ReflectionCacheEntry entry = ReflectionCache.Lookup (t);
 			int members = (int)reader.Length;
 			for (int i = 0; i < members; i ++) {
-				if (!reader.Read () || !reader.IsRaw ())
+				reader.Read ();
+				if (!reader.IsBinary ())
 					throw new FormatException ();
-				CheckBufferSize ((int)reader.Length);
-				reader.ReadValueRaw (_buf, 0, (int)reader.Length);
-				string name = Encoding.UTF8.GetString (_buf, 0, (int)reader.Length);
+				Reserve(reader.Length);
+				reader.ReadRawBytes(_buf);
+				string name = reader.StringifyBytes(_buf);
 				FieldInfo f;
 				if (!entry.FieldMap.TryGetValue (name, out f))
 					throw new FormatException ();
@@ -229,13 +234,13 @@ namespace MsgPack
 			IDeserializationCallback callback = o as IDeserializationCallback;
 			if (callback != null)
 				callback.OnDeserialization (this);
-			return o;
+			yield return o;
 		}
 
-		void CheckBufferSize (int size)
+		void Reserve (uint size)
 		{
 			if (_buf.Length < size)
-				Array.Resize<byte> (ref _buf, size);
+				Array.Resize<byte> (ref _buf, (int)size);
 		}
 
 		static void StringPacker (ObjectPacker packer, MsgPackWriter writer, object o)
@@ -243,17 +248,16 @@ namespace MsgPack
 			writer.Write (Encoding.UTF8.GetBytes ((string)o));
 		}
 
-		static object StringUnpacker (ObjectPacker packer, MsgPackReader reader)
+		static IEnumerator StringUnpacker (ObjectPacker packer, MsgPackReader reader)
 		{
-			if (!reader.Read ())
-				throw new FormatException ();
+			reader.Read ();
 			if (reader.Type == TypePrefixes.Nil)
-				return null;
-			if (!reader.IsRaw ())
+				yield return null;
+			if (!reader.IsStr ())
 				throw new FormatException ();
-			packer.CheckBufferSize ((int)reader.Length);
-			reader.ReadValueRaw (packer._buf, 0, (int)reader.Length);
-			return Encoding.UTF8.GetString (packer._buf, 0, (int)reader.Length);
+			byte[] buf = new byte[reader.Length];
+			reader.ReadRawBytes(buf);
+			yield return reader.StringifyBytes(buf);
 		}
 	}
 }

@@ -23,10 +23,10 @@ using System.Reflection;
 namespace MsgPack
 {
 	public struct Ext {
-		sbyte Type;
-		byte[] Data;
+		public byte Type;
+		public byte[] Data;
 
-		public Ext(sbyte type, byte[] data) {
+		public Ext(byte type, byte[] data) {
 			Type = type;
 			Data = data;
 		}
@@ -114,93 +114,112 @@ namespace MsgPack
 			}
 		}
 
-		public object Unpack (Stream strm)
+		public IEnumerator Unpack (Stream strm)
 		{
 			MsgPackReader reader = new MsgPackReader (strm);
 			return Unpack (reader);
 		}
 
-		public object Unpack (byte[] buf, int offset, int size)
+		public IEnumerator Unpack (byte[] buf, int offset, int size)
 		{
 			using (MemoryStream ms = new MemoryStream (buf, offset, size)) {
 				return Unpack (ms);
 			}
 		}
 
-		public object Unpack (byte[] buf)
+		public IEnumerator Unpack (byte[] buf)
 		{
 			return Unpack (buf, 0, buf.Length);
 		}
 
-		object Unpack (MsgPackReader reader)
+		IEnumerator Unpack (MsgPackReader reader)
 		{
-			if (!reader.Read ())
-				throw new FormatException ();
-
+			object obj;
+			reader.Read ();
 			switch (reader.Type) {
 				case TypePrefixes.PositiveFixNum:
 				case TypePrefixes.NegativeFixNum:
 				case TypePrefixes.Int32:
-					return reader.ValueSigned;
+					obj = reader.ValueSigned;
+					break;
 				case TypePrefixes.Int8:
-					return (sbyte)reader.ValueSigned;
+					obj = (sbyte)reader.ValueSigned;
+					break;
 				case TypePrefixes.Int16:
-					return (Int16)reader.ValueSigned;
+					obj = (Int16)reader.ValueSigned;
+					break;
 				case TypePrefixes.Int64:
-					return reader.ValueSigned64;
+					obj = reader.ValueSigned64;
+					break;
 
 				case TypePrefixes.UInt8:
-					return (byte)reader.ValueUnsigned;
+					obj = (byte)reader.ValueUnsigned;
+					break;
 				case TypePrefixes.UInt16:
-					return (UInt16)reader.ValueUnsigned;
+					obj = (UInt16)reader.ValueUnsigned;
+					break;
 				case TypePrefixes.UInt32:
-					return reader.ValueUnsigned;
+					obj = reader.ValueUnsigned;
+					break;
 				case TypePrefixes.UInt64:
-					return reader.ValueUnsigned64;
+					obj = reader.ValueUnsigned64;
+					break;
 				case TypePrefixes.True:
-					return true;
+					obj = true;
+					break;
 				case TypePrefixes.False:
-					return false;
+					obj = false;
+					break;
 				case TypePrefixes.Float:
-					return reader.ValueFloat;
+					obj = reader.ValueFloat;
+					break;
 				case TypePrefixes.Double:
-					return reader.ValueDouble;
+					obj = reader.ValueDouble;
+					break;
 				case TypePrefixes.Nil:
-					return null;
-				case TypePrefixes.FixRaw:
-				case TypePrefixes.Raw8:
-				case TypePrefixes.Raw16:
-				case TypePrefixes.Raw32:
-					return reader.ReadRawString ();
+					obj = null;
+					break;
+				case TypePrefixes.FixStr:
+				case TypePrefixes.Str8:
+				case TypePrefixes.Str16:
+				case TypePrefixes.Str32:
+					byte[] str = new byte[reader.Length];
+					reader.ReadStream (str, reader.Length);
+					obj = (object)reader.StringifyBytes(str);
+					break;
 				case TypePrefixes.Bin8:
 				case TypePrefixes.Bin16:
 				case TypePrefixes.Bin32:
 					byte[] tmp = new byte[reader.Length];
-					reader.ReadValueRaw (tmp, 0, tmp.Length);
-					return tmp;
+					reader.ReadStream (tmp, reader.Length);
+					obj = (object)tmp;
+					break;
 				case TypePrefixes.FixArray:
 				case TypePrefixes.Array16:
 				case TypePrefixes.Array32:
 					object[] ary = new object[reader.Length];
 					for (int i = 0; i < ary.Length; i ++)
 						ary[i] = Unpack (reader);
-					return ary;
+					obj = (object)ary;
+					break;
 				case TypePrefixes.FixMap:
 				case TypePrefixes.Map16:
 				case TypePrefixes.Map32:
-					IDictionary<object, object> dic = new Dictionary<object, object> ((int)reader.Length);
+					Dictionary<object, object> dic = new Dictionary<object, object> ((int)reader.Length);
 					int count = (int)reader.Length;
 					for (int i = 0; i < count; i ++) {
 						object k = Unpack (reader);
 						object v = Unpack (reader);
 						dic.Add (k, v);
 					}
-					return dic;
+					obj = (object)dic;
+					break;
 				case TypePrefixes.Ext8:
 				case TypePrefixes.Ext16:
 				case TypePrefixes.Ext32:
-					var et = reader.ReadExtType ();
-					switch (et) {
+					byte[] et = new byte[1];
+					reader.ReadExtType (et);
+					switch (et[0]) {
 					case 0x51:
 						if (reader.Length == 16) {
 							float a, b, c, d;
@@ -208,7 +227,7 @@ namespace MsgPack
 							b = reader.ReadSingle ();
 							c = reader.ReadSingle ();
 							d = reader.ReadSingle ();
-							return new UnityEngine.Quaternion (b, c, d, a);
+							obj = (object)new UnityEngine.Quaternion (b, c, d, a);
 						}
 						break;
 					case 0x56:
@@ -217,7 +236,7 @@ namespace MsgPack
 							a = reader.ReadSingle ();
 							b = reader.ReadSingle ();
 							c = reader.ReadSingle ();
-							return new UnityEngine.Vector3 (a, b, c);
+							obj = (object)new UnityEngine.Vector3 (a, b, c);
 						}
 						break;
 					case 0x57:
@@ -225,16 +244,18 @@ namespace MsgPack
 							float a, b;
 							a = reader.ReadSingle ();
 							b = reader.ReadSingle ();
-							return new UnityEngine.Vector2 (a, b);
+							obj = (object)new UnityEngine.Vector2 (a, b);
 						}
 						break;
 					}
 					var data = new byte[reader.Length];
-					reader.ReadValueRaw (data, 0, reader.Length);
-					return new Ext (et, data);
+					reader.ReadStream (data, reader.Length);
+					obj = (object)new Ext (et[0], data);
+					break;
 				default:
 					throw new FormatException ();
 			}
+			yield return obj;
 		}
 	}
 }

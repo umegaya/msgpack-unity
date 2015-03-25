@@ -213,11 +213,9 @@ FinallyProcess:
 			il.MarkLabel (lblLoopStart);
 
 			/* process */
-			// if (!MsgPackReader.Read() || !MsgPackReader.IsRaw()) UnpackFailed();
-			EmitUnpackReadAndTypeCheckCode (il, msgpackReader, typeof (MsgPackReader).GetMethod ("IsRaw"), failedMethod, false);
+			EmitUnpackReadAndTypeCheckCode (il, msgpackReader, typeof (MsgPackReader).GetMethod ("IsBin"), failedMethod, false);
 
 			// MsgPackReader.ReadRawString ()
-			// if (!Dictionary.TryGetValue (,)) UnpackFailed();
 			Label lbl3 = il.DefineLabel ();
 			il.EmitLd (mapping);
 			il.EmitLd (msgpackReader);

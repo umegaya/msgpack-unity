@@ -190,11 +190,6 @@ namespace MsgPack
 			_strm.Write (bytes, 0, bytes.Length);
 		}
 
-		public void Write(string s)
-		{
-			s.enco
-		}
-
 		public void WriteRawHeader (int N)
 		{
 			WriteLengthHeader (N, 32, 0xa0, 0xda, 0xdb);
@@ -210,17 +205,15 @@ namespace MsgPack
 			} else if (N <= 0xFFFF) {
 				t [0] = 0xc5;
 				t [1] = (byte)(N >> 8);
-				t [2] = N & 0xff;
+				t [2] = (byte)(N & 0xff);
 				_strm.Write (t, 0, 3);
-			} else if (N <= 0xFFFFFFFF) {
+			} else {
 				t [0] = 0xc6;
 				t [1] = (byte)(N >> 24);
 				t [2] = (byte)(N >> 16);
 				t [3] = (byte)(N >> 8);
 				t [4] = (byte)(N & 0xff);
 				_strm.Write (t, 0, 5);
-			} else {
-				throw new Exception ("Bin lenght overflow");
 			}
 		}
 
@@ -332,25 +325,25 @@ namespace MsgPack
 			_strm.Write (tmp, 0, 4);
 		}
 
-		public Write (UnityEngine.Vector2 v) {
+		public void Write (UnityEngine.Vector2 v) {
 			WriteExtHeader(0x57, 8);
 			writeFloat(v.x);
 			writeFloat(v.y);
 		}
-		public Write (UnityEngine.Vector3 v) {
+		public void Write (UnityEngine.Vector3 v) {
 			WriteExtHeader(0x56, 12);
 			writeFloat(v.x);
 			writeFloat(v.y);
 			writeFloat(v.z);
 		}
-		public Write (UnityEngine.Quaternion q) {
+		public void Write (UnityEngine.Quaternion q) {
 			WriteExtHeader(0x51, 16);
 			writeFloat(q.w);
 			writeFloat(q.x);
 			writeFloat(q.y);
 			writeFloat(q.z);
 		}
-		public WriteExtHeader(sbyte type, int length) {
+		public void WriteExtHeader(byte type, int length) {
 			var t = _tmp;
 
 			switch (length) {
@@ -379,19 +372,18 @@ namespace MsgPack
 					t[1] = (byte)(length >> 8);
 					t[2] = (byte)(length & 0xff);
 					_strm.Write(t, 0, 3);
-				} else if (length <= 0xffffffff) {
+				} else {
 					t[0] = 0xc9;
 					t[1] = (byte)(length >> 24);
 					t[2] = (byte)(length >> 16);
 					t[3] = (byte)(length >> 8);
 					t[4] = (byte)(length & 0xff);
 					_strm.Write(t, 0, 5);
-				} else {
-					throw new Exception("ext type length overflow");
 				}
+				break;
 			}
 		}
-		public Write (Ext ex) {
+		public void Write (Ext ex) {
 			WriteExtHeader(ex.Type, ex.Data.Length);
 			_strm.Write(ex.Data, 0, ex.Data.Length);
 		}
