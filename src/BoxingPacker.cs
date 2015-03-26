@@ -19,6 +19,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using UnityEngine;
 
 namespace MsgPack
 {
@@ -35,6 +36,7 @@ namespace MsgPack
 	public class BoxingPacker
 	{
 		static Type KeyValuePairDefinitionType;
+		Stack<object> _stack = new Stack<object>();
 
 		static BoxingPacker ()
 		{
@@ -55,6 +57,11 @@ namespace MsgPack
 			}
 		}
 
+		void Pack (MsgPackWriter writer, string s)
+		{
+			writer.Write(s);
+		}
+
 		void Pack (MsgPackWriter writer, object o)
 		{
 			if (o == null) {
@@ -63,6 +70,10 @@ namespace MsgPack
 			}
 
 			Type t = o.GetType ();
+			if (t == typeof(string)) {
+				Pack (writer, (string)o);
+				return;
+			}
 			if (t.IsPrimitive) {
 				if (t.Equals (typeof (int))) writer.Write ((int)o);
 				else if (t.Equals (typeof (uint))) writer.Write ((uint)o);
@@ -88,7 +99,7 @@ namespace MsgPack
 				}
 				return;
 			}
-			
+
 			if (t.IsArray) {
 				Array ary = (Array)o;
 				Type et = t.GetElementType ();
@@ -108,8 +119,9 @@ namespace MsgPack
 
 				// Array
 				writer.WriteArrayHeader (ary.Length);
-				for (int i = 0; i < ary.Length; i ++)
+				for (int i = 0; i < ary.Length; i ++) {
 					Pack (writer, ary.GetValue (i));
+				}
 				return;
 			}
 		}
@@ -132,10 +144,13 @@ namespace MsgPack
 			return Unpack (buf, 0, buf.Length);
 		}
 
-		IEnumerator Unpack (MsgPackReader reader)
+		IEnumerator Unpack (MsgPackReader reader, uint depth = 0)
 		{
+		Retry:
 			object obj;
-			reader.Read ();
+			IEnumerator it;
+			it = reader.Read (); while (it.MoveNext()) { yield return it.Current; };
+			//Debug.Log("type = " + reader.Type);
 			switch (reader.Type) {
 				case TypePrefixes.PositiveFixNum:
 				case TypePrefixes.NegativeFixNum:
@@ -184,22 +199,24 @@ namespace MsgPack
 				case TypePrefixes.Str16:
 				case TypePrefixes.Str32:
 					byte[] str = new byte[reader.Length];
-					reader.ReadStream (str, reader.Length);
+					it = reader.ReadStream (str, reader.Length); while (it.MoveNext()) { yield return it.Current; };
 					obj = (object)reader.StringifyBytes(str);
 					break;
 				case TypePrefixes.Bin8:
 				case TypePrefixes.Bin16:
 				case TypePrefixes.Bin32:
 					byte[] tmp = new byte[reader.Length];
-					reader.ReadStream (tmp, reader.Length);
+					it = reader.ReadStream (tmp, reader.Length); while (it.MoveNext()) { yield return it.Current; };
 					obj = (object)tmp;
 					break;
 				case TypePrefixes.FixArray:
 				case TypePrefixes.Array16:
 				case TypePrefixes.Array32:
 					object[] ary = new object[reader.Length];
-					for (int i = 0; i < ary.Length; i ++)
-						ary[i] = Unpack (reader);
+					for (int i = 0; i < ary.Length; i ++) {
+						it = Unpack (reader, depth + 1); while (it.MoveNext()) { yield return it.Current; };						
+						ary[i] = _stack.Pop();
+					}
 					obj = (object)ary;
 					break;
 				case TypePrefixes.FixMap:
@@ -207,9 +224,12 @@ namespace MsgPack
 				case TypePrefixes.Map32:
 					Dictionary<object, object> dic = new Dictionary<object, object> ((int)reader.Length);
 					int count = (int)reader.Length;
+					object k, v;
 					for (int i = 0; i < count; i ++) {
-						object k = Unpack (reader);
-						object v = Unpack (reader);
+						it = Unpack (reader, depth + 1); while (it.MoveNext()) { yield return it.Current; };						
+						k = _stack.Pop();
+						it = Unpack (reader, depth + 1); while (it.MoveNext()) { yield return it.Current; };						
+						v = _stack.Pop();
 						dic.Add (k, v);
 					}
 					obj = (object)dic;
@@ -218,44 +238,60 @@ namespace MsgPack
 				case TypePrefixes.Ext16:
 				case TypePrefixes.Ext32:
 					byte[] et = new byte[1];
-					reader.ReadExtType (et);
+					byte[] ftmp = new byte[4];
+					it = reader.ReadExtType (et); while (it.MoveNext()) { yield return it.Current; };		
 					switch (et[0]) {
 					case 0x51:
 						if (reader.Length == 16) {
 							float a, b, c, d;
-							a = reader.ReadSingle ();
-							b = reader.ReadSingle ();
-							c = reader.ReadSingle ();
-							d = reader.ReadSingle ();
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							a = reader.ReadSingle (ftmp);
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							b = reader.ReadSingle (ftmp);
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							c = reader.ReadSingle (ftmp);
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							d = reader.ReadSingle (ftmp);
 							obj = (object)new UnityEngine.Quaternion (b, c, d, a);
 						}
 						break;
 					case 0x56:
 						if (reader.Length == 12) {
 							float a, b, c;
-							a = reader.ReadSingle ();
-							b = reader.ReadSingle ();
-							c = reader.ReadSingle ();
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							a = reader.ReadSingle (ftmp);
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							b = reader.ReadSingle (ftmp);
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							c = reader.ReadSingle (ftmp);
 							obj = (object)new UnityEngine.Vector3 (a, b, c);
 						}
 						break;
 					case 0x57:
 						if (reader.Length == 8) {
 							float a, b;
-							a = reader.ReadSingle ();
-							b = reader.ReadSingle ();
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							a = reader.ReadSingle (ftmp);
+							it = reader.ReadStream(ftmp, 4); while (it.MoveNext()) { yield return it.Current; };						
+							b = reader.ReadSingle (ftmp);
 							obj = (object)new UnityEngine.Vector2 (a, b);
 						}
 						break;
 					}
 					var data = new byte[reader.Length];
-					reader.ReadStream (data, reader.Length);
+					it = reader.ReadStream(data, reader.Length); while (it.MoveNext()) { yield return it.Current; };						
 					obj = (object)new Ext (et[0], data);
 					break;
 				default:
 					throw new FormatException ();
 			}
-			yield return obj;
+			if (depth == 0) {
+				yield return obj;
+				goto Retry;
+			}
+			else {
+				_stack.Push(obj);
+			}
 		}
 	}
 }

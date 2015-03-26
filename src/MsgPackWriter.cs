@@ -17,7 +17,7 @@
 using System;
 using System.IO;
 using System.Text;
-
+using UnityEngine;
 
 namespace MsgPack
 {
@@ -37,9 +37,15 @@ namespace MsgPack
 		public void Write (byte x)
 		{
 			byte[] tmp = _tmp;
-			tmp[0] = 0xcc;
-			tmp[1] = x;
-			_strm.Write (tmp, 0, 2);
+			if (x <= 0x7f) {
+				tmp[0] = x;
+				_strm.Write (tmp, 0, 1);
+			}
+			else {
+				tmp[0] = 0xcc;
+				tmp[1] = x;
+				_strm.Write (tmp, 0, 2);
+			}
 		}
 
 		public void Write (ushort x)
@@ -53,7 +59,7 @@ namespace MsgPack
 
 		public void Write (char x)
 		{
-			Write ((ushort)x);
+			Write((ushort)x);
 		}
 
 		public void Write (uint x)
@@ -85,9 +91,18 @@ namespace MsgPack
 		public void Write (sbyte x)
 		{
 			byte[] tmp = _tmp;
-			tmp[0] = 0xd0;
-			tmp[1] = (byte)x;
-			_strm.Write (tmp, 0, 2);
+			if (x >= 0) {
+				Write ((byte)x);
+			}
+			else if (x <= -97) {
+				tmp[0] = (byte)x;
+				_strm.Write (tmp, 0, 1);
+			}
+			else {
+				tmp[0] = 0xd0;
+				tmp[1] = (byte)x;
+				_strm.Write (tmp, 0, 2);
+			}
 		}
 
 		public void Write (short x)
@@ -253,59 +268,24 @@ namespace MsgPack
 
 		public void Write (string x)
 		{
-			Write (x, false);
+			Write (x, _buf);
 		}
 		
-		public void Write (string x, bool highProbAscii)
-		{
-			Write (x, _buf, highProbAscii);
-		}
-
 		public void Write (string x, byte[] buf)
 		{
-			Write (x, buf, false);
-		}
-
-		public void Write (string x, byte[] buf, bool highProbAscii)
-		{
 			Encoder encoder = _encoder;
-			//fixed (char *pstr = x)
-			//fixed (byte *pbuf = buf) {
 			char[] str = x.ToCharArray();
-				if (highProbAscii && x.Length <= buf.Length) {
-					bool isAsciiFullCompatible = true;
-					for (int i = 0; i < x.Length; i ++) { 
-						//int v = (int)pstr[i];
-						int v = (int)(x[i]);
-						if (v > 0x7f) {
-							isAsciiFullCompatible = false;
-							break;
-						}
-						buf[i] = (byte)v;
-					}
-					if (isAsciiFullCompatible) {
-						WriteRawHeader (x.Length);
-						_strm.Write (buf, 0, x.Length);
-						return;
-					}
-				}
-
-				//WriteRawHeader (encoder.GetByteCount (pstr, x.Length, true));
-				WriteRawHeader (encoder.GetByteCount (str, 0, x.Length, true));
-				int str_len = x.Length;
-				//char *p = pstr;
-				int convertedChars, bytesUsed;
-				bool completed = true;
-				int j = 0;
-				while (str_len > 0 || !completed) {
-					//encoder.Convert (p, str_len, pbuf, buf.Length, false, out convertedChars, out bytesUsed, out completed);
-					encoder.Convert (str, j, str_len, buf, 0, buf.Length, false, out convertedChars, out bytesUsed, out completed);
-					_strm.Write (buf, 0, bytesUsed);
-					str_len -= convertedChars;
-					//p += convertedChars;
-					j += convertedChars;
-				}
-			//}
+			WriteRawHeader (encoder.GetByteCount (str, 0, x.Length, true));
+			int str_len = x.Length;
+			int convertedChars, bytesUsed;
+			bool completed = true;
+			int j = 0;
+			while (str_len > 0 || !completed) {
+				encoder.Convert (str, j, str_len, buf, 0, buf.Length, false, out convertedChars, out bytesUsed, out completed);
+				_strm.Write (buf, 0, bytesUsed);
+				str_len -= convertedChars;
+				j += convertedChars;
+			}
 		}
 
 		private void writeFloat(float x) {
@@ -387,5 +367,12 @@ namespace MsgPack
 			WriteExtHeader(ex.Type, ex.Data.Length);
 			_strm.Write(ex.Data, 0, ex.Data.Length);
 		}
+
+		void Reserve (uint size)
+		{
+			if (_buf.Length < size)
+				Array.Resize<byte> (ref _buf, (int)size);
+		}
+
 	}
 }

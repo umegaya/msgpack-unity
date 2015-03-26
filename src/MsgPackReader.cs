@@ -18,6 +18,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Collections;
+using UnityEngine;
 
 namespace MsgPack
 {
@@ -26,17 +27,18 @@ namespace MsgPack
 			byte[] buffer = new byte[2048];
 			int bytesRead;
 			long totalBytes = 0;
-			while((bytesRead = source.Read(buffer, 0, buffer.Length)) > 0) {
-				destination.Write(buffer, 0, bytesRead);
-				totalBytes += bytesRead;
+			try {
+				while (((bytesRead = source.Read(buffer, 0, buffer.Length)) > 0)) {
+					destination.Write(buffer, 0, bytesRead);
+					totalBytes += bytesRead;
+				}
+			}
+			catch (IOException e) {
 			}
 			return totalBytes;
 		}		
 	}
-	public class BuffShortException : Exception
-	{
-
-	}
+	public class BuffShortException : Exception {}
 	public class MsgPackReader
 	{
 		Stream _strm;
@@ -69,12 +71,17 @@ namespace MsgPack
 		}
 		public IEnumerator ReadStream(byte[] buf, int length) {
 			while ((this._buff.Length - this._buff.Position) < length) {
-				this._strm.CopyTo(this._buff);
-				if ((this._buff.Length - this._buff.Position) < length) {
-					yield return new BuffShortException();
+				yield return new BuffShortException();
+				var oldpos = this._buff.Position;
+				if (this._strm.CopyTo(this._buff) > 0) {
+					this._buff.Seek(oldpos, SeekOrigin.Begin);
 				}
+				//Debug.Log("readst2:" + this._buff.Length + "|" + this._buff.Position + "|" + length + "|" + this._strm.CanRead);
 			}
 			this._buff.Read(buf, 0, length);
+			if (this._buff.Position == this._buff.Length) {
+				this._buff.SetLength(0);
+			}
 		}
 		public IEnumerator ReadByte(byte[] buf) {
 			return this.ReadStream(buf, 1);
@@ -128,11 +135,13 @@ namespace MsgPack
 			return this._encoding.GetString(bytes);
 		}
 
-		public void Read ()
+		//TODO : need to rewrite as finite state machine for faster decoding
+		public IEnumerator Read ()
 		{
-			this.ReadByte (tmp0);
+			IEnumerator it;
+			it = this.ReadStream(tmp0, 1); while (it.MoveNext()) { yield return it.Current; };
 			int x = tmp0[0];
-			
+			//Debug.Log("Read:x:"+x);
 			if (x >= 0x00 && x <= 0x7f) {
 				this.Type = TypePrefixes.PositiveFixNum;
 			} else if (x >= 0xe0 && x <= 0xff) {
@@ -157,10 +166,12 @@ namespace MsgPack
 					ValueBoolean = true;
 					break;
 				case TypePrefixes.Float:
-					ValueFloat = ReadSingle ();
+					it = this.ReadStream (tmp0, 4); while (it.MoveNext()) { yield return it.Current; };
+					ValueFloat = ReadSingle (tmp0);
 					break;
 				case TypePrefixes.Double:
-					ValueDouble = ReadDouble ();
+					it = this.ReadStream (tmp0, 8); while (it.MoveNext()) { yield return it.Current; };
+					ValueDouble = ReadDouble (tmp0);
 					break;
 				case TypePrefixes.NegativeFixNum:
 					ValueSigned = (x & 0x1f) - 0x20;
@@ -170,37 +181,37 @@ namespace MsgPack
 					ValueUnsigned = (uint)ValueSigned;
 					break;
 				case TypePrefixes.UInt8:
-					this.ReadByte (tmp0);
+					it = this.ReadStream (tmp0, 1); while (it.MoveNext()) { yield return it.Current; };
 					x = tmp0[0];
 					ValueUnsigned = (uint)x;
 					break;
 				case TypePrefixes.UInt16:
-					this.ReadStream (tmp0, 2);
+					it = this.ReadStream (tmp0, 2); while (it.MoveNext()) { yield return it.Current; };
 					ValueUnsigned = ((uint)tmp0[0] << 8) | (uint)tmp0[1];
 					break;
 				case TypePrefixes.UInt32:
-					this.ReadStream (tmp0, 4);
+					it = this.ReadStream (tmp0, 4); while (it.MoveNext()) { yield return it.Current; };
 					ValueUnsigned = ((uint)tmp0[0] << 24) | ((uint)tmp0[1] << 16) | ((uint)tmp0[2] << 8) | (uint)tmp0[3];
 					break;
 				case TypePrefixes.UInt64:
-					this.ReadStream (tmp0, 8);
+					it = this.ReadStream (tmp0, 8); while (it.MoveNext()) { yield return it.Current; };
 					ValueUnsigned64 = ((ulong)tmp0[0] << 56) | ((ulong)tmp0[1] << 48) | ((ulong)tmp0[2] << 40) | ((ulong)tmp0[3] << 32) | ((ulong)tmp0[4] << 24) | ((ulong)tmp0[5] << 16) | ((ulong)tmp0[6] << 8) | (ulong)tmp0[7];
 					break;
 				case TypePrefixes.Int8:
-					this.ReadByte (tmp0);
+					it = this.ReadStream (tmp0, 1); while (it.MoveNext()) { yield return it.Current; };
 					x = tmp0[0];
 					ValueSigned = (sbyte)x;
 					break;
 				case TypePrefixes.Int16:
-					this.ReadStream (tmp0, 2);
+					it = this.ReadStream (tmp0, 2); while (it.MoveNext()) { yield return it.Current; };
 					ValueSigned = (short)((tmp0[0] << 8) | tmp0[1]);
 					break;
 				case TypePrefixes.Int32:
-					this.ReadStream (tmp0, 4);
+					it = this.ReadStream (tmp0, 4); while (it.MoveNext()) { yield return it.Current; };
 					ValueSigned = (tmp0[0] << 24) | (tmp0[1] << 16) | (tmp0[2] << 8) | tmp0[3];
 					break;
 				case TypePrefixes.Int64:
-					this.ReadStream (tmp0, 8);
+					it = this.ReadStream (tmp0, 8); while (it.MoveNext()) { yield return it.Current; };
 					ValueSigned64 = ((long)tmp0[0] << 56) | ((long)tmp0[1] << 48) | ((long)tmp0[2] << 40) | ((long)tmp0[3] << 32) | ((long)tmp0[4] << 24) | ((long)tmp0[5] << 16) | ((long)tmp0[6] << 8) | (long)tmp0[7];
 					break;
 				case TypePrefixes.FixStr:
@@ -213,7 +224,7 @@ namespace MsgPack
 				case TypePrefixes.Str8:
 				case TypePrefixes.Bin8:
 				case TypePrefixes.Ext8:
-					this.ReadStream (tmp0, 1);
+					it = this.ReadStream (tmp0, 1); while (it.MoveNext()) { yield return it.Current; };
 					Length = (uint)tmp0 [0];
 					break;
 				case TypePrefixes.Str16:
@@ -221,7 +232,7 @@ namespace MsgPack
 				case TypePrefixes.Array16:
 				case TypePrefixes.Map16:
 				case TypePrefixes.Ext16:
-					this.ReadStream (tmp0, 2);
+					it = this.ReadStream (tmp0, 2); while (it.MoveNext()) { yield return it.Current; };
 					Length = ((uint)tmp0[0] << 8) | (uint)tmp0[1];
 					break;
 				case TypePrefixes.Str32:
@@ -229,22 +240,27 @@ namespace MsgPack
 				case TypePrefixes.Array32:
 				case TypePrefixes.Map32:
 				case TypePrefixes.Ext32:
-					this.ReadStream (tmp0, 4);
+					it = this.ReadStream (tmp0, 4); while (it.MoveNext()) { yield return it.Current; };
 					Length = ((uint)tmp0[0] << 24) | ((uint)tmp0[1] << 16) | ((uint)tmp0[2] << 8) | (uint)tmp0[3];
 					break;
 				case TypePrefixes.FixExt8:
+					Type = TypePrefixes.Ext8;
 					Length = 1;
 					break;
 				case TypePrefixes.FixExt16:
+					Type = TypePrefixes.Ext8;
 					Length = 2;
 					break;
 				case TypePrefixes.FixExt32:
+					Type = TypePrefixes.Ext8;
 					Length = 4;
 					break;
 				case TypePrefixes.FixExt64:
+					Type = TypePrefixes.Ext8;
 					Length = 8;
 					break;
 				case TypePrefixes.FixExt128:
+					Type = TypePrefixes.Ext8;
 					Length = 16;
 					break;
 				default:
@@ -262,33 +278,31 @@ namespace MsgPack
 			return this.ReadStream(buf, this.Length);
 		}
 
-		public float ReadSingle() {
-			this.ReadStream (tmp0, 4);
+		public float ReadSingle(byte[] buf) {
 			if (BitConverter.IsLittleEndian) {
-				tmp1 [0] = tmp0 [3];
-				tmp1 [1] = tmp0 [2];
-				tmp1 [2] = tmp0 [1];
-				tmp1 [3] = tmp0 [0];
+				tmp1 [0] = buf [3];
+				tmp1 [1] = buf [2];
+				tmp1 [2] = buf [1];
+				tmp1 [3] = buf [0];
 				return BitConverter.ToSingle (tmp1, 0);
 			} else {
-				return BitConverter.ToSingle (tmp0, 0);
+				return BitConverter.ToSingle (buf, 0);
 			}
 		}
 
-		public double ReadDouble() {
-			this.ReadStream (tmp0, 8);
+		public double ReadDouble(byte[] buf) {
 			if (BitConverter.IsLittleEndian) {
-				tmp1[0] = tmp0[7];
-				tmp1[1] = tmp0[6];
-				tmp1[2] = tmp0[5];
-				tmp1[3] = tmp0[4];
-				tmp1[4] = tmp0[3];
-				tmp1[5] = tmp0[2];
-				tmp1[6] = tmp0[1];
-				tmp1[7] = tmp0[0];
+				tmp1[0] = buf[7];
+				tmp1[1] = buf[6];
+				tmp1[2] = buf[5];
+				tmp1[3] = buf[4];
+				tmp1[4] = buf[3];
+				tmp1[5] = buf[2];
+				tmp1[6] = buf[1];
+				tmp1[7] = buf[0];
 				return BitConverter.ToDouble (tmp1, 0);
 			} else {
-				return BitConverter.ToDouble (tmp0, 0);
+				return BitConverter.ToDouble (buf, 0);
 			}
 		}
 	}
