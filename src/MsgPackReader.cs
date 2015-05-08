@@ -1,5 +1,6 @@
 ﻿//
-// Copyright 2011 Kazuki Oikawa
+// Copyright 2015 Takehiro Iyatomi
+// based on the code which Copyright 2011 Kazuki Oikawa, but heavily modified for supporting streaming unpack.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +23,19 @@ using UnityEngine;
 
 namespace MsgPack
 {
+	public class BuffShortException : Exception {}
 	public static class Patch {
+		public static int WSAEWOULDBLOCK = 10035;
+		public static bool SocketClosed(this IOException source) {
+			//get IOException.InnerException
+			var e = source.InnerException;
+			if (e is System.Net.Sockets.SocketException) {
+				var se = (System.Net.Sockets.SocketException)e;
+				//WSAEWOULDBLOCK seems like EAGAIN or EPROGRESS for non-blocking socket on linux
+				return se.ErrorCode != WSAEWOULDBLOCK;
+			}
+			return false;
+		}
 		public static long CopyTo(this Stream source, Stream destination) {
 			byte[] buffer = new byte[2048];
 			int bytesRead;
@@ -34,11 +47,13 @@ namespace MsgPack
 				}
 			}
 			catch (IOException e) {
+				if (e.SocketClosed()) {
+					throw e;
+				}
 			}
 			return totalBytes;
-		}		
+		}
 	}
-	public class BuffShortException : Exception {}
 	public class MsgPackReader
 	{
 		Stream _strm;
